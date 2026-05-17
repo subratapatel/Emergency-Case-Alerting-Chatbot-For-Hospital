@@ -1,0 +1,533 @@
+{
+  "name": "Emergency Case Alerting Chatbot For Hospital",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "health-assistant",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "X-Content-Type-Options",
+                "value": "nosniff"
+              }
+            ]
+          }
+        }
+      },
+      "id": "8d54882a-f01e-47f0-add6-d577c1ab400a",
+      "name": "Health Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -1184,
+        192
+      ],
+      "webhookId": "b99f7a17-c9f1-47df-9517-785ac56d3b33",
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Add a new field called 'myNewField' to the JSON of the item\nconst rawInput = $json.body.userInput || \"\"\n\n//Normalize\nconst input = rawInput\n  .toLowerCase()\n  .replace(/[^a-z0-9\\s]/g, \"\")\n  .replace(/\\s+/g, \" \")\n  .trim();\n\n//chest pain\nconst hasChestPain = \n  input.includes(\"chest\") && input.includes(\"pain\");\n\n//Breathing\nconst breathingKeywords = [\n  \"cant breathe\",\n  \"cannot breathe\",\n  \"breathing difficulty\",\n  \"shortness of breath\",\n  \"breathness\",\n  \"shortness of breath\",\n  \"breathless\",\n  \"not able to breathe\",\n  \"unable to breathe\"\n  ];\n\nconst hasBreathingIssues = breathingKeywords.some(k => \n  input.includes(k)\n);\n\nconst isEmergency = hasChestPain || hasBreathingIssues;\n\nlet queryType = \"general\";\nif (input.includes(\"pain\") || input.includes(\"fever\")) {\n  queryType=\"symptom\";\n}\n\nreturn {\n  $json,\n  debug_input: input,\n  isEmergency,\n  queryType,\n  language: $json.body?.language || \"en\",\n  name: $json.body?.name,\n  contact: $json.body?.contact\n};\n\n  \n\n"
+      },
+      "id": "8e4365e2-2bf8-4ad1-b961-1f2742c6867e",
+      "name": "Safety Check & Categorization",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -976,
+        192
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c5528e99-6c2d-469e-aec6-ad5b07d5c8f1",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "leftValue": "={{ $json.isEmergency }}",
+              "rightValue": true
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {
+          "ignoreCase": true,
+          "looseTypeValidation": true
+        }
+      },
+      "id": "6a00b792-a809-485f-baa0-70ecf4199974",
+      "name": "Emergency Router",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -784,
+        192
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "emergency",
+              "name": "response",
+              "type": "string",
+              "value": "=🚨 EMERGENCY DETECTED 🚨\n\n**CALL EMERGENCY SERVICES IMMEDIATELY:**\n\n🇺🇸 USA: 911\n🇬🇧 UK: 999\n🇪🇺 EU: 112\n🇦🇺 Australia: 000\n\n**Your message suggests a medical emergency.**\n\nWhile waiting for help:\n1. Stay calm\n2. Don't drive yourself\n3. Unlock doors for paramedics\n4. Have medications list ready\n5. Call someone to be with you\n\n**This is an automated response. Get immediate medical help!**"
+            },
+            {
+              "id": "type",
+              "name": "responseType",
+              "type": "string",
+              "value": "emergency"
+            },
+            {
+              "id": "severity",
+              "name": "severity",
+              "type": "string",
+              "value": "critical"
+            },
+            {
+              "id": "ba501c1a-41e5-4455-ba13-639e0ef8df6e",
+              "name": "name",
+              "value": "={{ $json.$json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "d2d78f57-73d7-408b-9b53-4191090044fa",
+              "name": "Id",
+              "value": "={{ $json.$json.body.id }}",
+              "type": "string"
+            },
+            {
+              "id": "31ee7dec-df88-44bc-a69e-aa7adceb2ea0",
+              "name": "Contact No",
+              "value": "={{ $json.$json.body['Contact No'] }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2d5ff1e4-56de-489f-8df6-c3fa42368291",
+      "name": "Emergency Response",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -576,
+        96
+      ],
+      "typeVersion": 3.4,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-5.2",
+          "mode": "list",
+          "cachedResultName": "GPT-5.2"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are a helpful health information assistant. You provide general health information and wellness guidance while being very careful to:\n\n1. NEVER diagnose conditions\n2. NEVER prescribe medications\n3. NEVER replace professional medical advice\n4. ALWAYS recommend consulting healthcare providers for medical concerns\n5. ALWAYS emphasize this is general information only\n\nYour responses should be:\n- Informative but cautious\n- Empathetic and supportive\n- Clear about limitations\n- Focused on general wellness\n- Encouraging professional consultation\n\nFor symptom queries:\n- Provide general information about possible causes\n- Suggest when to see a doctor\n- Offer comfort measures if appropriate\n- Never minimize serious symptoms\n\nFor medication queries:\n- Only provide general information\n- Emphasize consulting pharmacists/doctors\n- Never suggest specific dosages\n- Mention common side effects only generally\n\nAlways end with a disclaimer about seeking professional medical advice.",
+              "role": "system"
+            },
+            {
+              "content": "={{ $json.$json.body }}\nContext:\n- Query Type: {{ $json.queryType }}\n- Language: {{ $json.language }}\n\n\nPlease provide helpful general health information while being clear this is not medical advice."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1000,
+          "temperature": 0.5
+        }
+      },
+      "id": "8e7f10fa-1562-4944-89d4-7e6a05a41757",
+      "name": "Health Information AI",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "position": [
+        -576,
+        288
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "openAiApi": {
+          "id": "64uqKGi3fmthlk7u",
+          "name": "OpenAI account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error_response",
+              "name": "response",
+              "type": "string",
+              "value": "=An unexpected error occurred while processing your health query. Please try again later or consult a healthcare professional directly. We apologize for the inconvenience."
+            },
+            {
+              "id": "error_type",
+              "name": "responseType",
+              "type": "string",
+              "value": "error"
+            },
+            {
+              "id": "error_severity",
+              "name": "severity",
+              "type": "string",
+              "value": "high"
+            },
+            {
+              "id": "error_disclaimer",
+              "name": "disclaimer",
+              "type": "string",
+              "value": "=⚕️ **Important Medical Disclaimer:**\nThis information is for educational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition."
+            },
+            {
+              "id": "error_resources",
+              "name": "resources",
+              "type": "string",
+              "value": "=📞 **Health Resources:**\n• Find a doctor: https://doctor.webmd.com/\n• Symptom checker: https://www.mayoclinic.org/symptom-checker/\n• Mental health: https://www.samhsa.gov/find-help/national-helpline\n• Poison control: 1-800-222-1222 (US)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "978e3a36-2df1-41a8-a3fc-089e24a814dc",
+      "name": "AI Error Handler",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -672,
+        512
+      ],
+      "typeVersion": 3.4,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "3d0292bc-0e07-4b55-9b7f-be0b417c2e05",
+              "name": "response",
+              "type": "string",
+              "value": "={{ $json.message.content }}"
+            },
+            {
+              "id": "e4e66a7a-1776-465b-865f-76666c5e3584",
+              "name": "responseType",
+              "type": "string",
+              "value": "={{ $('Safety Check & Categorization').item.json.queryType }}"
+            },
+            {
+              "id": "b2346867-40bb-4321-a3bd-59b948036dca",
+              "name": "disclaimer",
+              "type": "string",
+              "value": "=⚕️ **Important Medical Disclaimer:**\nThis information is for educational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition."
+            },
+            {
+              "id": "8f30e7de-3dcb-412f-bcd8-d8bbfff087fb",
+              "name": "resources",
+              "type": "string",
+              "value": "=📞 **Health Resources:**\n• Find a doctor: https://doctor.webmd.com/\n• Symptom checker: https://www.mayoclinic.org/symptom-checker/\n• Mental health: https://www.samhsa.gov/find-help/national-helpline\n• Poison control: 1-800-222-1222 (US)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "68024b49-83e8-4148-a1ac-91b577449826",
+      "name": "Format Health Response",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        -112,
+        288
+      ],
+      "typeVersion": 3.4,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.response }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "X-Health-Disclaimer",
+                "value": "This is not medical advice"
+              }
+            ]
+          }
+        }
+      },
+      "id": "5511f745-2d26-4c4f-837e-adb221d3e919",
+      "name": "Send Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [
+        256,
+        192
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c5528e99-6c2d-469e-aec6-ad5b07d5c8f1",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              },
+              "leftValue": "={{ $json.error === undefined }}",
+              "rightValue": true
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "149bd495-0c03-4481-8087-db6c638839ef",
+      "name": "Check AI Success",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        -320,
+        288
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "1j78oF7mBArJwWao6tyH9L1JgCsdwTxa0TgMzOeq6mDM",
+          "mode": "list",
+          "cachedResultName": "Patient Details",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1j78oF7mBArJwWao6tyH9L1JgCsdwTxa0TgMzOeq6mDM/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ejGS_1mkrs-4BYTm_ZRRV_0xgdT5t2UPNvjLitY8E_o/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Symptoms": "={{ $json.responseType }}",
+            "Name ": "={{ $json.name }}",
+            "Patient Id": "={{ $json.Id }}",
+            "Contact No": "={{ $json['Contact No'] }}"
+          },
+          "matchingColumns": [
+            "Symptoms"
+          ],
+          "schema": [
+            {
+              "id": "Name ",
+              "displayName": "Name ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Patient Id",
+              "displayName": "Patient Id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Contact No",
+              "displayName": "Contact No",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Symptoms",
+              "displayName": "Symptoms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f84a1387-8dc6-484a-a1f0-0bff769e6ce8",
+      "name": "Append or update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "j8GBkXVEq33MCw6a",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Emergency Router": {
+      "main": [
+        [
+          {
+            "node": "Emergency Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Health Information AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emergency Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append or update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Query Webhook": {
+      "main": [
+        [
+          {
+            "node": "Safety Check & Categorization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Information AI": {
+      "main": [
+        [
+          {
+            "node": "Check AI Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Health Response": {
+      "main": [
+        [
+          {
+            "node": "Send Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety Check & Categorization": {
+      "main": [
+        [
+          {
+            "node": "Emergency Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check AI Success": {
+      "main": [
+        [
+          {
+            "node": "Format Health Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "a371df4e-339c-42c0-bb30-1aa649a56228",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f8945e1676b80d29b396e19cfc031fd1282160af6898890d6372b6d47bd9e91f"
+  },
+  "id": "E6auZjxrtvPmnqV5",
+  "tags": []
+}
